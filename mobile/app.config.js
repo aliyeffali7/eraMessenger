@@ -6,14 +6,22 @@
 // EAS, which resolves to a local temp file path at build time. Locally
 // (no EXPO env var set) this falls back to the real file on disk, so
 // `npx expo start` / `expo prebuild` are unaffected.
+//
+// A google-services.json placed in this folder wins over the EAS secret, so
+// switching Firebase projects only needs the new file copied in here.
+const fs = require("fs");
+const path = require("path");
 const baseConfig = require("./app.json").expo;
+const localGoogleServices = path.join(__dirname, "google-services.json");
 
 module.exports = {
   expo: {
     ...baseConfig,
     android: {
       ...baseConfig.android,
-      googleServicesFile: process.env.GOOGLE_SERVICES_JSON || baseConfig.android.googleServicesFile,
+      googleServicesFile: fs.existsSync(localGoogleServices)
+        ? baseConfig.android.googleServicesFile
+        : process.env.GOOGLE_SERVICES_JSON || baseConfig.android.googleServicesFile,
     },
   },
 };
