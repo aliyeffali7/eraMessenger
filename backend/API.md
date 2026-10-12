@@ -1,6 +1,6 @@
 # Messenger API — frontend inteqrasiyası üçün
 
-Base URL: `http://169.58.161.115/api` (prod, hələ HTTP — tezliklə HTTPS olacaq)
+Base URL: `http://13.140.176.82/api` (prod, hələ HTTP — tezliklə HTTPS olacaq)
 Auth: JWT (SimpleJWT). Hər sorğuya `Authorization: Bearer <access>` başlığı.
 
 ## Auth
