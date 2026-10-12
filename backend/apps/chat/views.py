@@ -23,8 +23,7 @@ from .services import (
     mark_conversations_delivered,
     remove_member,
     rename_conversation,
-    send_direct_message,
-    send_group_message,
+    send_message,
     set_admins_only,
     set_conversation_admin,
 )
@@ -199,8 +198,6 @@ class MessageDetailView(APIView):
             message=message,
             editor=request.user,
             text=request.data.get("text", ""),
-            ciphertext=request.data.get("ciphertext", ""),
-            nonce=request.data.get("nonce", ""),
         )
         return Response(MessageSerializer(message).data)
 
@@ -260,20 +257,9 @@ class MessageListCreateView(generics.ListCreateAPIView):
         return list_messages(conversation=conversation, after_id=after_id)
 
     def perform_create(self, serializer):
-        conversation = self.get_conversation()
-        if conversation.is_group:
-            message = send_group_message(
-                conversation=conversation,
-                sender=self.request.user,
-                text=serializer.validated_data.get("text", ""),
-                attachment=serializer.validated_data.get("attachment"),
-            )
-        else:
-            message = send_direct_message(
-                conversation=conversation,
-                sender=self.request.user,
-                ciphertext=serializer.validated_data.get("ciphertext", ""),
-                nonce=serializer.validated_data.get("nonce", ""),
-                attachment=serializer.validated_data.get("attachment"),
-            )
-        serializer.instance = message
+        serializer.instance = send_message(
+            conversation=self.get_conversation(),
+            sender=self.request.user,
+            text=serializer.validated_data.get("text", ""),
+            attachment=serializer.validated_data.get("attachment"),
+        )

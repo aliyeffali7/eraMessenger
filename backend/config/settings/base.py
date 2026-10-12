@@ -17,7 +17,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "apps.accounts",
     "apps.chat",
-    "apps.library",
+    "apps.files",
     "apps.org",
     "apps.notifications",
     "apps.meetings",

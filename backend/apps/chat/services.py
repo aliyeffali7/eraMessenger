@@ -79,29 +79,16 @@ def _assert_can_post(*, conversation: Conversation, sender: User) -> None:
         raise PermissionDenied("Bu qrupda yalnız adminlər mesaj yaza bilər.")
 
 
-def edit_message(
-    *,
-    message: Message,
-    editor: User,
-    text: str = "",
-    ciphertext: str = "",
-    nonce: str = "",
-) -> Message:
+def edit_message(*, message: Message, editor: User, text: str) -> Message:
     if message.sender_id != editor.id:
         raise PermissionDenied("Yalnız öz mesajınızı redaktə edə bilərsiniz.")
     if message.attachment:
         raise ValidationError("Qoşması olan mesaj redaktə edilə bilməz.")
-    if message.ciphertext:
-        if not ciphertext:
-            raise ValidationError("ciphertext tələb olunur.")
-        message.ciphertext = ciphertext
-        message.nonce = nonce
-    else:
-        if not text.strip():
-            raise ValidationError("text boş ola bilməz.")
-        message.text = text
+    if not text.strip():
+        raise ValidationError("text boş ola bilməz.")
+    message.text = text
     message.edited_at = timezone.now()
-    message.save(update_fields=["text", "ciphertext", "nonce", "edited_at"])
+    message.save(update_fields=["text", "edited_at"])
     return message
 
 
@@ -115,53 +102,23 @@ def delete_message(*, message: Message, actor: User) -> None:
     message.delete()
 
 
-def send_group_message(
+def send_message(
     *, conversation: Conversation, sender: User, text: str, attachment=None
 ) -> Message:
     _assert_can_post(conversation=conversation, sender=sender)
+    if not text.strip() and not attachment:
+        raise ValidationError("Boş mesaj göndərilə bilməz.")
     message = Message.objects.create(
         conversation=conversation,
         sender=sender,
         text=text,
         attachment=attachment or "",
     )
+    body = "📎 Qoşma" if attachment else text
+    preview = f"{sender.username}: {body}" if conversation.is_group else body
     try:
         _notify_participants(
-            conversation=conversation,
-            sender=sender,
-            preview=(
-                f"{sender.username}: 📎 Qoşma"
-                if attachment
-                else f"{sender.username}: {text}"[:200]
-            ),
-        )
-    except Exception:
-        pass
-    return message
-
-
-def send_direct_message(
-    *,
-    conversation: Conversation,
-    sender: User,
-    ciphertext: str,
-    nonce: str,
-    attachment=None,
-) -> Message:
-    # The server never sees plaintext here — `ciphertext`/`nonce` were produced
-    # client-side using the recipient's public key. We can't build a content
-    # preview for the push notification because we're unable to decrypt it.
-    _assert_can_post(conversation=conversation, sender=sender)
-    message = Message.objects.create(
-        conversation=conversation,
-        sender=sender,
-        ciphertext=ciphertext,
-        nonce=nonce,
-        attachment=attachment or "",
-    )
-    try:
-        _notify_participants(
-            conversation=conversation, sender=sender, preview="Yeni mesaj"
+            conversation=conversation, sender=sender, preview=preview[:200]
         )
     except Exception:
         pass

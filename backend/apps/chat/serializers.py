@@ -19,8 +19,6 @@ class MessageSerializer(serializers.ModelSerializer):
             "conversation",
             "sender",
             "text",
-            "ciphertext",
-            "nonce",
             "created_at",
             "edited_at",
             "attachment",

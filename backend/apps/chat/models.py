@@ -7,7 +7,7 @@ from django.dispatch import receiver
 
 
 def attachment_path(instance, filename):
-    # Random name: the original filename lives (encrypted) inside the message body.
+    # Random name: the original filename lives inside the message body.
     return f"chat/{uuid.uuid4().hex}"
 
 
@@ -42,28 +42,19 @@ class Message(models.Model):
     sender = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sent_messages"
     )
-    # Group messages (not yet E2EE): stored as plaintext here.
     text = models.TextField(blank=True, default="")
-    # Direct (1:1) messages: end-to-end encrypted. The server stores only
-    # ciphertext + nonce and cannot read the content — decryption happens
-    # entirely on the recipient's device using their private key.
-    ciphertext = models.TextField(blank=True, default="")
-    nonce = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     # Set when the sender edits the message; null otherwise.
     edited_at = models.DateTimeField(null=True, blank=True)
-    # Voice note / file. In 1:1 chats this is an encrypted blob (the key and
-    # metadata travel inside `ciphertext`); it is only served through the
-    # authenticated download endpoint, never as a public /media URL.
+    # Voice note / file (metadata travels inside `text`). Only served through
+    # the authenticated download endpoint, never as a public /media URL.
     attachment = models.FileField(upload_to=attachment_path, blank=True)
 
     class Meta:
         ordering = ["created_at"]
 
     def __str__(self):
-        return (
-            f"{self.sender_id}: {'<encrypted>' if self.ciphertext else self.text[:30]}"
-        )
+        return f"{self.sender_id}: {self.text[:30]}"
 
 
 class ReadMarker(models.Model):

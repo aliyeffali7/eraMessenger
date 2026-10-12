@@ -69,12 +69,6 @@ class CreateMeetingSerializer(serializers.Serializer):
     user_ids = serializers.ListField(
         child=serializers.IntegerField(), required=False, default=list
     )
-    section_ids = serializers.ListField(
-        child=serializers.IntegerField(), required=False, default=list
-    )
-    unit_ids = serializers.ListField(
-        child=serializers.IntegerField(), required=False, default=list
-    )
     all_users = serializers.BooleanField(required=False, default=False)
 
 
