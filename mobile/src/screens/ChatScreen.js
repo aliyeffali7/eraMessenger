@@ -29,6 +29,7 @@ import BottomSheet from "../components/BottomSheet";
 import DateSeparator from "../components/DateSeparator";
 import ForwardSheet from "../components/ForwardSheet";
 import MessageBubble from "../components/MessageBubble";
+import OfflineBanner from "../components/OfflineBanner";
 import PeerProfileSheet from "../components/PeerProfileSheet";
 import {
   deleteMessage,
@@ -36,11 +37,9 @@ import {
   fetchConversation,
   fetchMessages,
   markConversationRead,
-  sendEncryptedMessage,
-  sendGroupMessage,
+  sendMessage,
 } from "../api/chat";
 import { useAuth } from "../context/AuthContext";
-import { decryptFromSender, encryptForRecipient, getOrCreateIdentityKeyPair } from "../crypto";
 import {
   MAX_ATTACHMENT_BYTES,
   describeBody,
@@ -52,15 +51,16 @@ import {
 } from "../lib/attachments";
 import { dateSeparatorLabel, dayKey, messageTime } from "../lib/format";
 import { rememberMessages } from "../lib/messageStore";
+import {
+  cacheKeys,
+  cacheMessages,
+  isNetworkError,
+  readCache,
+  writeCache,
+} from "../lib/offlineCache";
 import { useTheme } from "../theme";
 
 const GROUP_GAP_MS = 3 * 60 * 1000;
-
-function decryptDirect(message, otherPublicKey, mySecretKey) {
-  if (!message.ciphertext) return message.text || "";
-  if (!otherPublicKey) return null;
-  return decryptFromSender(message.ciphertext, message.nonce, otherPublicKey, mySecretKey);
-}
 
 // Mesajları tarix ayırıcıları + qruplaşma məlumatı ilə düz siyahıya çevirir.
 function buildItems(messages, meId) {
@@ -101,9 +101,8 @@ export default function ChatScreen({ route, navigation }) {
 
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
-  const [otherPublicKey, setOtherPublicKey] = useState(null);
   const [otherUser, setOtherUser] = useState(null);
-  const [mySecretKey, setMySecretKey] = useState(null);
+  const [offline, setOffline] = useState(false);
   const [presence, setPresence] = useState("");
   const [copiedId, setCopiedId] = useState(null);
   const [peerOpen, setPeerOpen] = useState(false);
@@ -116,6 +115,7 @@ export default function ChatScreen({ route, navigation }) {
   const [forwardMsg, setForwardMsg] = useState(null); // yönləndirilən mesaj
   const [notice, setNotice] = useState(null);
   const listRef = useRef(null);
+  const haveServerMeta = useRef(false); // keş serverdən gələni əzməsin
 
   // Səs yazma / oxutma (bir oxuducu — eyni anda bir səs mesajı).
   const recorder = useAudioRecorder(RecordingPresets.LOW_QUALITY);
@@ -137,28 +137,40 @@ export default function ChatScreen({ route, navigation }) {
     } else {
       const other = data.participants.find((p) => p.id !== user.id);
       setOtherUser(other || null);
-      setOtherPublicKey(other?.public_key || "");
-      setPresence("uçdan-uca şifrəli");
+      setPresence(other ? `@${other.username}` : "");
       setPeerLastRead(data.peer_last_read || null);
       setPeerLastDelivered(data.peer_last_delivered || null);
     }
   }
 
+  // Əvvəlcə lokal keşdən (oflayn açılış), sonra serverdən.
   useEffect(() => {
     let active = true;
     (async () => {
-      const { secretKey } = await getOrCreateIdentityKeyPair();
+      const [cachedConv, cachedMsgs] = await Promise.all([
+        readCache(cacheKeys.conversation(conversationId)),
+        readCache(cacheKeys.messages(conversationId)),
+      ]);
       if (!active) return;
-      setMySecretKey(secretKey);
-      const { data } = await fetchConversation(conversationId);
-      if (!active) return;
-      applyConversation(data);
+      if (cachedConv && !haveServerMeta.current) applyConversation(cachedConv);
+      if (cachedMsgs) setMessages((prev) => (prev.length ? prev : cachedMsgs));
     })();
     return () => {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, isGroup, user.id]);
+
+  function refreshConversation(isActive) {
+    fetchConversation(conversationId)
+      .then(({ data }) => {
+        if (!isActive()) return;
+        haveServerMeta.current = true;
+        applyConversation(data);
+        writeCache(cacheKeys.conversation(conversationId), data);
+      })
+      .catch(() => {});
+  }
 
   useEffect(() => {
     let active = true;
@@ -172,13 +184,14 @@ export default function ChatScreen({ route, navigation }) {
           const localOnly = prev.filter((m) => m._pending || m._failed);
           return [...data, ...localOnly];
         });
+        setOffline(false);
+        cacheMessages(conversationId, data);
         markConversationRead(conversationId).catch(() => {});
         // Söhbət metasını (çatdı/oxundu quşları, admin rejimi) yenilə.
-        fetchConversation(conversationId)
-          .then(({ data: c }) => active && applyConversation(c))
-          .catch(() => {});
-      } catch {
-        /* offline */
+        refreshConversation(() => active);
+      } catch (err) {
+        // oflayn — keşdəki mesajlar qalsın
+        if (active && isNetworkError(err)) setOffline(true);
       }
     }
     poll();
@@ -201,25 +214,23 @@ export default function ChatScreen({ route, navigation }) {
     return buildItems(deduped, user.id);
   }, [messages, user.id]);
 
-  // Söhbət lentini axtarış üçün lokal indeksə yaz (deşifrə edilmiş mətnlə).
+  // Söhbət lentini axtarış üçün lokal indeksə yaz.
   useEffect(() => {
     if (!messages.length) return;
-    if (!isGroup && !mySecretKey) return;
-    const decoded = messages
+    const indexed = messages
       .map((m) => {
-        const body = isGroup ? m.text : decryptDirect(m, otherPublicKey, mySecretKey);
-        if (!body) return null;
+        if (!m.text || m._pending || m._failed) return null;
         return {
           id: m.id,
-          text: describeBody(body),
+          text: describeBody(m.text),
           from: m.sender.first_name || m.sender.username,
           at: m.created_at,
           mine: m.sender.id === user.id,
         };
       })
       .filter(Boolean);
-    rememberMessages(conversationId, { name: title, isGroup }, decoded);
-  }, [messages, isGroup, otherPublicKey, mySecretKey, conversationId, title, user.id]);
+    rememberMessages(conversationId, { name: title, isGroup }, indexed);
+  }, [messages, isGroup, conversationId, title, user.id]);
 
   async function handleSend() {
     const value = text.trim();
@@ -238,21 +249,13 @@ export default function ChatScreen({ route, navigation }) {
         username: user.username,
       },
       text: value,
-      ciphertext: "",
-      nonce: "",
       created_at: new Date().toISOString(),
       _pending: true,
     };
     setMessages((prev) => [...prev, optimistic]);
 
     try {
-      let data;
-      if (isGroup) {
-        ({ data } = await sendGroupMessage(conversationId, value));
-      } else {
-        const { ciphertext, nonce } = encryptForRecipient(value, otherPublicKey, mySecretKey);
-        ({ data } = await sendEncryptedMessage(conversationId, ciphertext, nonce));
-      }
+      const { data } = await sendMessage(conversationId, value);
       setMessages((prev) => {
         if (prev.some((m) => m.id === data.id)) return prev.filter((m) => m.id !== tmpId);
         return prev.map((m) => (m.id === tmpId ? data : m));
@@ -272,7 +275,7 @@ export default function ChatScreen({ route, navigation }) {
   function startEdit(m) {
     setActionMsg(null);
     setEditing(m);
-    setText(m._body || m.text || "");
+    setText(m.text || "");
   }
 
   function cancelEdit() {
@@ -287,13 +290,7 @@ export default function ChatScreen({ route, navigation }) {
     setEditing(null);
     setText("");
     try {
-      let data;
-      if (isGroup || !m.ciphertext) {
-        ({ data } = await editMessage(conversationId, m.id, { text: value }));
-      } else {
-        const { ciphertext, nonce } = encryptForRecipient(value, otherPublicKey, mySecretKey);
-        ({ data } = await editMessage(conversationId, m.id, { ciphertext, nonce }));
-      }
+      const { data } = await editMessage(conversationId, m.id, value);
       setMessages((prev) => prev.map((x) => (x.id === m.id ? data : x)));
     } catch {
       /* redaktə alınmadı — növbəti poll köhnə mesajı qaytaracaq */
@@ -343,28 +340,19 @@ export default function ChatScreen({ route, navigation }) {
           username: user.username,
         },
         text: encodeAttachmentBody(meta),
-        ciphertext: "",
-        nonce: "",
         created_at: new Date().toISOString(),
         _pending: true,
       },
     ]);
     try {
-      const { data } = await sendAttachment({
-        conversationId,
-        isGroup,
-        kind,
-        asset,
-        otherPublicKey,
-        mySecretKey,
-      });
+      const { data } = await sendAttachment({ conversationId, kind, asset });
       setMessages((prev) => {
         if (prev.some((m) => m.id === data.id)) return prev.filter((m) => m.id !== tmpId);
         return prev.map((m) => (m.id === tmpId ? data : m));
       });
-    } catch {
+    } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== tmpId));
-      flash("Qoşma göndərilə bilmədi");
+      flash(isNetworkError(err) ? "İnternet yoxdur — qoşma göndərilmədi" : "Qoşma göndərilə bilmədi");
     }
   }
 
@@ -448,8 +436,8 @@ export default function ChatScreen({ route, navigation }) {
       player.replace(uri);
       setVoiceId(m.id);
       player.play();
-    } catch {
-      flash("Səs mesajı açıla bilmədi");
+    } catch (err) {
+      flash(isNetworkError(err) ? "Səs mesajı hələ yüklənməyib — internet lazımdır" : "Səs mesajı açıla bilmədi");
     } finally {
       setVoiceLoading(null);
     }
@@ -465,16 +453,15 @@ export default function ChatScreen({ route, navigation }) {
       } else {
         flash("Bu cihazda faylı açmaq mümkün deyil");
       }
-    } catch {
-      flash("Fayl açıla bilmədi");
+    } catch (err) {
+      flash(isNetworkError(err) ? "Fayl hələ yüklənməyib — internet lazımdır" : "Fayl açıla bilmədi");
     } finally {
       setFileBusyId(null);
     }
   }
 
-  const keyMissing = !isGroup && !otherPublicKey && mySecretKey;
   const adminOnlyLock = isGroup && adminsOnly && !iAmAdmin;
-  const blocked = keyMissing || adminOnlyLock;
+  const blocked = adminOnlyLock;
 
   return (
     <KeyboardAvoidingView
@@ -523,33 +510,19 @@ export default function ChatScreen({ route, navigation }) {
         ) : null}
       </View>
 
-      {keyMissing ? (
-        <View style={[styles.banner, { backgroundColor: t.color.accentMuted }]}>
-          <Ionicons name="lock-open-outline" size={14} color={t.color.danger} />
-          <Text style={[t.typography.caption, { color: t.color.danger, flex: 1 }]}>
-            Qarşı tərəf hələ təhlükəsiz açar yaratmayıb — mesajlaşma bloklanıb.
-          </Text>
-        </View>
-      ) : adminOnlyLock ? (
+      <OfflineBanner visible={offline} />
+
+      {adminOnlyLock ? (
         <View style={[styles.banner, { backgroundColor: t.color.accentMuted }]}>
           <Ionicons name="lock-closed" size={14} color={t.color.textSecondary} />
           <Text style={[t.typography.caption, { color: t.color.textSecondary, flex: 1 }]}>
             Bu qrupda yalnız adminlər mesaj yaza bilər.
           </Text>
         </View>
-      ) : (
-        <View style={styles.e2eePill}>
-          <View style={[styles.pill, { backgroundColor: t.color.accentMuted }]}>
-            <Ionicons name="lock-closed" size={12} color={t.color.accent} />
-            <Text style={[t.typography.caption, { color: t.color.textSecondary }]}>
-              {isGroup ? "Qrup mesajları hələ E2EE deyil" : "Mesajlar uçdan-uca şifrələnir"}
-            </Text>
-          </View>
-        </View>
-      )}
+      ) : null}
 
       {notice ? (
-        <View style={styles.e2eePill}>
+        <View style={styles.noticeWrap}>
           <View style={[styles.pill, { backgroundColor: t.color.accent }]}>
             <Text style={[t.typography.caption, { color: t.color.textOnAccent }]}>{notice}</Text>
           </View>
@@ -566,9 +539,8 @@ export default function ChatScreen({ route, navigation }) {
           if (item.type === "date") return <DateSeparator label={item.label} />;
           const m = item.message;
           const mine = m.sender.id === user.id;
-          const body = isGroup || !m.ciphertext ? m.text : decryptDirect(m, otherPublicKey, mySecretKey);
-          const undecryptable = !isGroup && m.ciphertext && body === null;
-          const attMeta = undecryptable ? null : parseAttachmentBody(body);
+          const body = m.text;
+          const attMeta = parseAttachmentBody(body);
           const isThisVoice = attMeta?.kind === "voice" && voiceId === m.id;
           const voice =
             attMeta?.kind === "voice"
@@ -611,14 +583,11 @@ export default function ChatScreen({ route, navigation }) {
                   : `${messageTime(m.created_at)}${m.edited_at ? " · redaktə edilib" : ""}`
               }
               status={status}
-              undecryptable={undecryptable}
               attachment={attMeta}
               voice={voice}
               fileBusy={fileBusyId === m.id}
               onOpenFile={() => openFile(m, attMeta)}
-              onLongPress={() =>
-                !undecryptable && !m._pending && !m._failed && setActionMsg({ ...m, _body: body })
-              }
+              onLongPress={() => !m._pending && !m._failed && setActionMsg(m)}
               onPress={m._failed ? () => retrySend(m) : undefined}
             />
           );
@@ -698,7 +667,7 @@ export default function ChatScreen({ route, navigation }) {
 
       <ForwardSheet
         visible={!!forwardMsg}
-        text={forwardMsg?._body || ""}
+        text={forwardMsg?.text || ""}
         onClose={() => setForwardMsg(null)}
         onDone={({ sent, failed }) => {
           setForwardMsg(null);
@@ -710,11 +679,11 @@ export default function ChatScreen({ route, navigation }) {
       <BottomSheet visible={!!actionMsg} onClose={() => setActionMsg(null)}>
         {actionMsg ? (
           <View style={[styles.actionCard, { borderColor: t.color.border }]}>
-            {!parseAttachmentBody(actionMsg._body) ? (
+            {!parseAttachmentBody(actionMsg.text) ? (
               <>
                 <Pressable
                   onPress={() => {
-                    handleCopy(actionMsg._body, actionMsg.id);
+                    handleCopy(actionMsg.text, actionMsg.id);
                     setActionMsg(null);
                   }}
                   style={({ pressed }) => [styles.action, pressed && { backgroundColor: t.color.surfaceAlt }]}
@@ -737,7 +706,7 @@ export default function ChatScreen({ route, navigation }) {
               </>
             ) : null}
 
-            {actionMsg.sender.id === user.id && !parseAttachmentBody(actionMsg._body) ? (
+            {actionMsg.sender.id === user.id && !parseAttachmentBody(actionMsg.text) ? (
               <>
                 <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: t.color.border }} />
                 <Pressable
@@ -752,7 +721,7 @@ export default function ChatScreen({ route, navigation }) {
 
             {actionMsg.sender.id === user.id || (isGroup && iAmAdmin) ? (
               <>
-                {!parseAttachmentBody(actionMsg._body) ? (
+                {!parseAttachmentBody(actionMsg.text) ? (
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: t.color.border }} />
                 ) : null}
                 <Pressable
@@ -784,7 +753,7 @@ const styles = StyleSheet.create({
   hAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   hText: { flex: 1 },
   banner: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8 },
-  e2eePill: { alignItems: "center", paddingVertical: 8 },
+  noticeWrap: { alignItems: "center", paddingVertical: 8 },
   pill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   inputRow: {
     flexDirection: "row",

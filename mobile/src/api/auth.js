@@ -15,7 +15,3 @@ export function fetchMe() {
 export function searchUsers(search) {
   return client.get("/accounts/users/", { params: { search } });
 }
-
-export function setPublicKey(publicKey) {
-  return client.patch("/accounts/me/public-key/", { public_key: publicKey });
-}

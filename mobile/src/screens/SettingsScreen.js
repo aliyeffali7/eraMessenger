@@ -58,7 +58,7 @@ export default function SettingsScreen({ navigation }) {
       </Card>
 
       <Text style={[t.typography.caption, styles.version, { color: t.color.textSecondary }]}>
-        Böyük Loja Messenger · v1.0.0
+        Messenger · v1.0.0
       </Text>
     </ScrollView>
   );

@@ -1,6 +1,6 @@
 // tweetnacl has no random source in React Native / Hermes ("Error: no PRNG"),
-// which breaks EVERYTHING crypto: E2EE identity keys, PIN key derivation,
-// secretbox nonces. expo-crypto provides a synchronous CSPRNG that works in
+// which breaks the app-lock crypto in secureLock.js (PIN key derivation salt,
+// secretbox nonces). expo-crypto provides a synchronous CSPRNG that works in
 // Expo Go and standalone builds alike. Wire it into nacl once, before any
 // nacl.randomBytes / keyPair / secretbox call runs.
 //

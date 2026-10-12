@@ -1,8 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
-import { fetchMe, login as loginRequest, refreshAccessToken, setPublicKey } from "../api/auth";
+import { fetchMe, login as loginRequest, refreshAccessToken } from "../api/auth";
 import { setAccessToken, setRefreshHandler } from "../api/client";
-import { getOrCreateIdentityKeyPair } from "../crypto";
+import { clearMessageIndex } from "../lib/messageStore";
+import {
+  cacheKeys,
+  clearOfflineCache,
+  isNetworkError,
+  readCache,
+  writeCache,
+} from "../lib/offlineCache";
 import {
   disableBiometric,
   enableBiometric,
@@ -17,15 +24,8 @@ import { registerForPushNotifications } from "../notifications";
 
 const AuthContext = createContext(null);
 
-async function ensurePublicKeyUploaded(currentUser) {
-  try {
-    const { publicKey } = await getOrCreateIdentityKeyPair();
-    if (currentUser.public_key !== publicKey) {
-      await setPublicKey(publicKey);
-    }
-  } catch {
-    // Non-fatal: birbaşa mesajlar növbəti uğurlu login-ə qədər açılmaya bilər.
-  }
+function registerPush() {
+  registerForPushNotifications().catch(() => {});
 }
 
 export function AuthProvider({ children }) {
@@ -44,7 +44,8 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 401 → refresh token ilə yeni access almağa cəhd. Alınmasa → kilidlə.
+  // 401 → refresh token ilə yeni access almağa cəhd. Server tokeni rədd
+  // edərsə → kilidlə. İnternet yoxdursa kilidləmə — oflayn rejim davam edir.
   useEffect(() => {
     setRefreshHandler(async () => {
       if (!refreshRef.current) return null;
@@ -52,12 +53,17 @@ export function AuthProvider({ children }) {
         const { data } = await refreshAccessToken(refreshRef.current);
         setAccessToken(data.access);
         return data.access;
-      } catch {
-        setLocked(true);
+      } catch (err) {
+        if (!isNetworkError(err)) setLocked(true);
         return null;
       }
     });
   }, []);
+
+  function rememberUser(me) {
+    setUser(me);
+    writeCache(cacheKeys.me, me);
+  }
 
   async function restoreSession() {
     try {
@@ -76,7 +82,7 @@ export function AuthProvider({ children }) {
     setAccessToken(data.access);
     refreshRef.current = data.refresh;
     const me = await fetchMe();
-    setUser(me.data);
+    rememberUser(me.data);
     setNeedsPinSetup(true);
   }
 
@@ -87,32 +93,43 @@ export function AuthProvider({ children }) {
     pinRef.current = pin;
     setNeedsPinSetup(false);
     setLocked(false);
-    registerForPushNotifications();
-    if (user) ensurePublicKeyUploaded(user);
+    registerPush();
   }
 
   // 3) Kilid açma — PIN/biometrika ekranından gələn refresh token ilə.
+  // İnternet yoxdursa keşdəki profil ilə oflayn açılır; access token növbəti
+  // sorğuda (401 → refresh) avtomatik alınır.
   async function unlock(refreshToken, pin) {
     refreshRef.current = refreshToken;
     if (pin) pinRef.current = pin;
-    const { data } = await refreshAccessToken(refreshToken);
-    setAccessToken(data.access);
-    let me = user;
-    if (!me) {
-      const res = await fetchMe();
-      me = res.data;
-      setUser(me);
+    let online = true;
+    try {
+      const { data } = await refreshAccessToken(refreshToken);
+      setAccessToken(data.access);
+    } catch (err) {
+      if (!isNetworkError(err)) throw err;
+      online = false;
     }
+    let me = user || (await readCache(cacheKeys.me));
+    if (online) {
+      try {
+        me = (await fetchMe()).data;
+      } catch (err) {
+        if (!me || !isNetworkError(err)) throw err;
+      }
+    }
+    if (!me) throw new Error("offline-no-profile");
+    rememberUser(me);
     setLocked(false);
-    registerForPushNotifications();
-    if (me) ensurePublicKeyUploaded(me);
+    if (online) registerPush();
   }
 
-  // Admin loja/dərəcəni dəyişə bilər — profil ekranı açılanda təzələnir.
+  // Profil ekranı açılanda təzələnir (məs. admin adı dəyişibsə).
   const refreshUser = useCallback(async () => {
     try {
       const { data } = await fetchMe();
       setUser(data);
+      writeCache(cacheKeys.me, data);
     } catch {
       /* offline / token yoxdur — köhnə məlumat qalsın */
     }
@@ -126,6 +143,8 @@ export function AuthProvider({ children }) {
 
   async function logout() {
     await wipeLock();
+    await clearOfflineCache();
+    await clearMessageIndex();
     setAccessToken(null);
     refreshRef.current = null;
     pinRef.current = null;

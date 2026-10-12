@@ -1,4 +1,4 @@
-// Böyük Loja Messenger — dizayn tokenləri + ThemeProvider.
+// Messenger — dizayn tokenləri + ThemeProvider.
 // Qayda: komponentdə sabit kodlanmış rəng YOXDUR. Hər rəng buradan gəlir.
 
 import { createContext, useContext, useMemo } from "react";

@@ -23,6 +23,7 @@ import {
   setConversationAdminsOnly,
 } from "../api/chat";
 import { useAuth } from "../context/AuthContext";
+import { cacheKeys, readCache, writeCache } from "../lib/offlineCache";
 import { useTheme } from "../theme";
 
 function nameOf(u) {
@@ -46,10 +47,19 @@ export default function GroupInfoScreen({ route, navigation }) {
   const [savingAdminsOnly, setSavingAdminsOnly] = useState(false);
 
   const load = useCallback(() => {
-    fetchConversation(conversationId).then(({ data }) => {
-      setConversation(data);
-      setName(data.name);
-    });
+    fetchConversation(conversationId)
+      .then(({ data }) => {
+        setConversation(data);
+        setName(data.name);
+        writeCache(cacheKeys.conversation(conversationId), data);
+      })
+      .catch(async () => {
+        // oflayn — son yadda saxlanan qrup məlumatını göstər
+        const cached = await readCache(cacheKeys.conversation(conversationId));
+        if (!cached) return;
+        setConversation((prev) => prev || cached);
+        setName((prev) => prev || cached.name);
+      });
   }, [conversationId]);
 
   useFocusEffect(useCallback(() => load(), [load]));

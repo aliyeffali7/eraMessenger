@@ -1,12 +1,8 @@
-// Local, decrypted message index for in-chat search (WhatsApp style).
+// Lokal mesaj indeksi — söhbət mətnlərində axtarış üçün (WhatsApp kimi).
 //
-// The server only holds ciphertext, so it can't search message text. As the
-// user opens chats, ChatScreen decrypts the messages and hands them here;
-// ChatListScreen's search box then looks through this index too.
-//
-// Stored in AsyncStorage as plaintext. TODO(security): encrypt this store at
-// rest with a device key — for now it mirrors what's already readable on the
-// unlocked device.
+// ChatScreen açılan söhbətlərin mesajlarını bura yazır; ChatListScreen-in
+// axtarışı bu indeksə də baxır, ona görə axtarış internet olmadan da işləyir.
+// AsyncStorage-də saxlanılır və çıxışda (logout) silinir.
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 

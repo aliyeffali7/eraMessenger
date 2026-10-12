@@ -55,14 +55,11 @@ export default function LoginScreen() {
           bounces={false}
         >
           <View style={styles.header}>
-            <View style={[styles.mono, { backgroundColor: t.color.accentMuted, borderColor: t.color.accentLine }]}>
-              <Ionicons name="shield-checkmark" size={30} color={t.color.accent} />
-            </View>
             <Text style={[t.typography.display, styles.title, { color: t.color.textPrimary }]}>
-              Xoş gördük, qardaş
+              Messenger
             </Text>
             <Text style={[t.typography.caption, { color: t.color.textSecondary }]}>
-              Böyük Loja · Daxili Ekosistem
+              Hesabınıza daxil olun
             </Text>
           </View>
 
@@ -101,14 +98,8 @@ export default function LoginScreen() {
           />
 
           <View style={styles.footer}>
-            <View style={styles.e2eeRow}>
-              <Ionicons name="lock-closed" size={13} color={t.color.textSecondary} />
-              <Text style={[t.typography.caption, { color: t.color.textSecondary }]}>
-                Mesajlar uçdan-uca şifrələnir
-              </Text>
-            </View>
             <Text style={[t.typography.caption, styles.footerHint, { color: t.color.textSecondary }]}>
-              Hesabınız yoxdursa, Böyük Katiblə əlaqə saxlayın.
+              Hesabınız yoxdursa, administratorla əlaqə saxlayın.
             </Text>
           </View>
         </ScrollView>
@@ -121,18 +112,8 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   container: { flexGrow: 1, paddingHorizontal: 28, paddingVertical: 24, justifyContent: "center" },
   header: { alignItems: "center", marginBottom: 28 },
-  mono: {
-    width: 80,
-    height: 80,
-    borderRadius: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    marginBottom: 20,
-  },
   title: { textAlign: "center", marginBottom: 4 },
   errorRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10 },
   footer: { alignItems: "center", gap: 6, marginTop: 36 },
-  e2eeRow: { flexDirection: "row", alignItems: "center", gap: 5 },
   footerHint: { textAlign: "center" },
 });

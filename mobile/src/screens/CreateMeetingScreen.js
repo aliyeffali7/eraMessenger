@@ -9,7 +9,6 @@ import SearchBar from "../components/SearchBar";
 import SectionHeader from "../components/SectionHeader";
 import { searchUsers } from "../api/auth";
 import { createMeeting } from "../api/meetings";
-import { fetchUnits } from "../api/org";
 import { useTheme } from "../theme";
 
 function nameOf(u) {
@@ -24,19 +23,12 @@ export default function CreateMeetingScreen({ navigation }) {
   const [location, setLocation] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
-  const [units, setUnits] = useState([]);
   const [allUsers, setAllUsers] = useState(false);
-  const [unitIds, setUnitIds] = useState([]);
-  const [sectionIds, setSectionIds] = useState([]);
   const [search, setSearch] = useState("");
   const [candidates, setCandidates] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    fetchUnits().then(({ data }) => setUnits(data)).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (!search.trim()) return setCandidates([]);
@@ -45,9 +37,6 @@ export default function CreateMeetingScreen({ navigation }) {
     }, 250);
     return () => clearTimeout(id);
   }, [search]);
-
-  const toggle = (arr, setArr, id) =>
-    setArr(arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
 
   function addUser(u) {
     if (!selectedUsers.some((x) => x.id === u.id)) setSelectedUsers((p) => [...p, u]);
@@ -74,8 +63,6 @@ export default function CreateMeetingScreen({ navigation }) {
         location: location.trim(),
         startsAt: startsAt.toISOString(),
         userIds: selectedUsers.map((u) => u.id),
-        sectionIds,
-        unitIds,
         allUsers,
       });
       navigation.goBack();
@@ -109,27 +96,6 @@ export default function CreateMeetingScreen({ navigation }) {
       ) : null}
 
       <View style={allUsers ? { opacity: 0.4 } : null} pointerEvents={allUsers ? "none" : "auto"}>
-      <SectionHeader title="Böyük Loja" />
-      <View style={styles.chipWrap}>
-        {units.map((u) => (
-          <Chip key={u.id} label={u.name} selected={unitIds.includes(u.id)} onPress={() => toggle(unitIds, setUnitIds, u.id)} />
-        ))}
-      </View>
-
-      <SectionHeader title="Möhtərəm Lojalar" />
-      <View style={styles.chipWrap}>
-        {units.flatMap((u) =>
-          (u.sections || []).map((s) => (
-            <Chip
-              key={s.id}
-              label={`${u.name} / ${s.name}`}
-              selected={sectionIds.includes(s.id)}
-              onPress={() => toggle(sectionIds, setSectionIds, s.id)}
-            />
-          ))
-        )}
-      </View>
-
       <SectionHeader title="Xüsusi şəxslər" />
       <SearchBar value={search} onChangeText={setSearch} placeholder="Üzv axtar" style={{ marginHorizontal: 16 }} />
       <View style={{ paddingHorizontal: 16 }}>

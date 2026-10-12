@@ -189,7 +189,7 @@ export default function PinScreen({ mode = "unlock", onDone }) {
     try {
       const res = await unlockWithPin(pin);
       if (res.ok) {
-        await unlock(res.refreshToken, pin);
+        await unlockOrReport(res.refreshToken, pin);
         return;
       }
       setDigits("");
@@ -213,12 +213,28 @@ export default function PinScreen({ mode = "unlock", onDone }) {
     }
   }
 
+  // Sessiya bitibsə (server tokeni rədd edir) və ya ilk açılışda profil keşdə
+  // yoxdursa və internet də yoxdursa — istifadəçiyə göstər.
+  async function unlockOrReport(refreshToken, pin) {
+    try {
+      await unlock(refreshToken, pin);
+    } catch (err) {
+      setDigits("");
+      setError(
+        err?.response
+          ? "Sessiya bitib — yenidən daxil olun"
+          : "Serverə qoşulmaq olmadı. İnterneti yoxlayın."
+      );
+      doShake();
+    }
+  }
+
   async function handleBiometric() {
     if (busy || isLocked) return;
     setBusy(true);
     try {
       const res = await unlockWithBiometric();
-      if (res.ok) await unlock(res.refreshToken);
+      if (res.ok) await unlockOrReport(res.refreshToken);
     } finally {
       setBusy(false);
     }

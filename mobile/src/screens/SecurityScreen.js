@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text } from "react-native";
 
 import Card from "../components/Card";
 import Row from "../components/Row";
@@ -51,16 +50,6 @@ export default function SecurityScreen({ navigation }) {
       </Card>
       {note ? <Text style={[t.typography.caption, styles.note, { color: t.color.danger }]}>{note}</Text> : null}
 
-      <SectionHeader title="Şifrələmə" />
-      <Card style={styles.card}>
-        <View style={styles.e2ee}>
-          <Ionicons name="lock-closed" size={16} color={t.color.accent} />
-          <Text style={[t.typography.body, { color: t.color.textPrimary, flex: 1, fontSize: 14 }]}>
-            Birbaşa mesajlar bu cihazda yaradılan açarla uçdan-uca şifrələnir. Gizli açar cihazı tərk etmir.
-          </Text>
-        </View>
-      </Card>
-
       <SectionHeader title="Bu cihaz" />
       <Card padded={false} style={styles.card}>
         <Row first type="plain" icon="phone-portrait-outline" title="Ekran şəkli qorunması" value="Aktiv" />
@@ -75,6 +64,5 @@ export default function SecurityScreen({ navigation }) {
 const styles = StyleSheet.create({
   content: { paddingBottom: 40 },
   card: { marginHorizontal: 16, overflow: "hidden" },
-  e2ee: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   note: { marginHorizontal: 20, marginTop: 8 },
 });

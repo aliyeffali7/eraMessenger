@@ -21,12 +21,8 @@ export function fetchMessages(conversationId, afterId) {
   return client.get(`/chat/conversations/${conversationId}/messages/`, { params });
 }
 
-export function sendGroupMessage(conversationId, text) {
+export function sendMessage(conversationId, text) {
   return client.post(`/chat/conversations/${conversationId}/messages/`, { text });
-}
-
-export function sendEncryptedMessage(conversationId, ciphertext, nonce) {
-  return client.post(`/chat/conversations/${conversationId}/messages/`, { ciphertext, nonce });
 }
 
 export function renameConversation(conversationId, name) {
@@ -40,12 +36,8 @@ export function setConversationAdminsOnly(conversationId, adminsOnly) {
   });
 }
 
-export function editMessage(conversationId, messageId, payload) {
-  // payload: { text } qrup üçün, { ciphertext, nonce } DM üçün
-  return client.patch(
-    `/chat/conversations/${conversationId}/messages/${messageId}/`,
-    payload
-  );
+export function editMessage(conversationId, messageId, text) {
+  return client.patch(`/chat/conversations/${conversationId}/messages/${messageId}/`, { text });
 }
 
 export function deleteMessage(conversationId, messageId) {

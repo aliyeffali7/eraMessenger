@@ -9,8 +9,7 @@ Auth: JWT (SimpleJWT). Hər sorğuya `Authorization: Bearer <access>` başlığ�
 |---|---|---|---|
 | POST | `/accounts/login/` | `{username, password}` | `{access, refresh}` |
 | POST | `/accounts/login/refresh/` | `{refresh}` | `{access}` |
-| GET | `/accounts/me/` | — | user obyekti (`id, username, degree, section, public_key`) |
-| PATCH | `/accounts/me/public-key/` | `{public_key}` | user |
+| GET | `/accounts/me/` | — | user obyekti (`id, username, first_name, last_name, is_staff, joined_at`) |
 | GET | `/accounts/users/?search=<q>` | — | user siyahısı (yeni çat üçün) |
 
 ## Çat
@@ -28,37 +27,38 @@ Auth: JWT (SimpleJWT). Hər sorğuya `Authorization: Bearer <access>` başlığ�
 | POST/DELETE | `/chat/conversations/<id>/members/...` | üzv idarəsi (qrup admini) |
 | POST | `/chat/conversations/<id>/leave/` | qrupdan çıx |
 
-### Mesaj formatı (VACİB — E2EE)
+### Mesaj formatı
 
-- **1:1 söhbət:** mesaj **client-də şifrələnir**. Body: `{ciphertext, nonce}` (hər ikisi base64).
-  Server məzmunu **görmür**, yalnız saxlayıb ötürür.
-- **Qrup söhbət (hələlik):** `{text}` düz mətn. (Qrup E2EE sonrakı mərhələdə.)
-
-Şifrələmə: Curve25519 `nacl.box` (tweetnacl). Hər cihaz öz açar cütünü yaradır,
-gizli açar cihazdan çıxmır, public açar `/accounts/me/public-key/` ilə serverə yüklənir.
-Mesajı deşifrə etmək üçün göndərənin `public_key`-i lazımdır (`/accounts/me/` və ya
-`/accounts/users/` cavabından).
-
-> Qeyd: hazırda `public_key` user başına **tək sahədir** — çox cihaz dəstəyi
-> (cihaz reyestri) planlaşdırılır, o zaman bu dəyişəcək.
+- Bütün mesajlar (1:1 və qrup) düz mətn kimi göndərilir və saxlanılır: `{text}`.
+- Redaktə: `PATCH /chat/conversations/<id>/messages/<msgId>/` → `{text}`.
 
 ### Qoşmalar (səs mesajı / fayl)
 
 - Göndərmə: `POST /chat/conversations/<id>/messages/` **multipart/form-data**, əlavə sahə `attachment` (fayl, maks. 15 MB).
-  - **1:1:** fayl cihazda `nacl.secretbox` (təsadüfi 32B açar + 24B nonce) ilə şifrələnir, şifrəli blob `attachment` kimi yüklənir.
-    Mesajın şifrəli mətni (`ciphertext`) `"ATT:" + JSON` olur: `{kind:"voice"|"file", name, mime, size, dur?, key, nonce}` (key/nonce base64).
-  - **Qrup:** fayl olduğu kimi yüklənir, `text` = `"ATT:" + JSON` (key/nonce yoxdur).
+  Fayl olduğu kimi yüklənir, `text` = `"\u0001ATT:" + JSON`: `{kind:"voice"|"file", name, mime, size, dur?}`.
 - Mesaj cavabında `has_attachment: true` olur (URL verilmir).
-- Yükləmə: `GET /chat/conversations/<id>/messages/<msgId>/attachment/` (JWT, yalnız söhbət üzvləri) → xam bayt (1:1-də şifrəli blob).
+- Yükləmə: `GET /chat/conversations/<id>/messages/<msgId>/attachment/` (JWT, yalnız söhbət üzvləri) → xam bayt.
 - Qoşması olan mesaj redaktə oluna bilməz. Mesaj silinəndə fayl da silinir.
 - Serverdə nginx: `client_max_body_size 20m;` olmalıdır.
+
+## Ortaq fayllar
+
+Hər daxil olmuş istifadəçi faylları görür, yükləyir və endirir. Faylı yalnız
+yükləyən şəxs və ya admin silə bilər.
+
+| Metod | Endpoint | Qeyd |
+|---|---|---|
+| GET | `/files/?search=<q>` | fayl siyahısı (`id, name, size, mime, uploaded_by, created_at`), ən yenisi əvvəl |
+| POST | `/files/` | multipart: `file` (maks. 15 MB), istəyə bağlı `name` |
+| GET | `/files/<id>/download/` | faylın özü (JWT tələb olunur) |
+| DELETE | `/files/<id>/` | yalnız yükləyən və ya admin |
 
 ## Digər
 
 | Metod | Endpoint | Qeyd |
 |---|---|---|
-| POST | `/notifications/register-token/` | `{token}` push bildiriş üçün (məzmun payload-da deyil) |
-| GET | `/library/`, `/meetings/`, `/org/...` | köməkçi modullar |
+| POST | `/notifications/register-token/` | `{token}` push bildiriş üçün (bildirişdə mesajın önizləməsi göstərilir) |
+| GET | `/meetings/` | iclaslar; yaratma (`/meetings/create/`, admin): `user_ids` və ya `all_users` |
 
 ## Lokal işə salma (Next.js developer üçün)
 

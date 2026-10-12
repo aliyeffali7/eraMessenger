@@ -9,14 +9,15 @@ import Badge from "../components/Badge";
 import Chip from "../components/Chip";
 import EmptyState from "../components/EmptyState";
 import ListRow from "../components/ListRow";
+import OfflineBanner from "../components/OfflineBanner";
 import SearchBar from "../components/SearchBar";
 import SectionHeader from "../components/SectionHeader";
 import { fetchConversations } from "../api/chat";
 import { useAuth } from "../context/AuthContext";
-import { decryptFromSender, getOrCreateIdentityKeyPair } from "../crypto";
 import { describeBody } from "../lib/attachments";
 import { chatListTime, messageTime } from "../lib/format";
 import { rememberMessages, searchMessages } from "../lib/messageStore";
+import { cacheKeys, isNetworkError, readCache, writeCache } from "../lib/offlineCache";
 import { useTheme } from "../theme";
 
 const PINNED_KEY = "chat.pinnedIds";
@@ -28,15 +29,10 @@ function conversationTitle(c, meId) {
   return `${other.first_name || ""} ${other.last_name || ""}`.trim() || other.username;
 }
 
-function previewFor(c, meId, mySecretKey) {
+function previewFor(c) {
   const last = c.last_message;
   if (!last) return "Hələ mesaj yoxdur";
-  if (c.is_group) return describeBody(last.text || "");
-  if (!last.ciphertext) return describeBody(last.text || "");
-  const other = c.participants.find((p) => p.id !== meId);
-  if (!other?.public_key || !mySecretKey) return "🔒 Şifrələnmiş mesaj";
-  const decrypted = decryptFromSender(last.ciphertext, last.nonce, other.public_key, mySecretKey);
-  return decrypted === null ? "🔒 Şifrələnmiş mesaj" : describeBody(decrypted);
+  return describeBody(last.text || "");
 }
 
 export default function ChatListScreen({ navigation }) {
@@ -45,14 +41,17 @@ export default function ChatListScreen({ navigation }) {
   const { user } = useAuth();
 
   const [conversations, setConversations] = useState([]);
-  const [mySecretKey, setMySecretKey] = useState(null);
+  const [offline, setOffline] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all"); // all | unread | groups
   const [pinnedIds, setPinnedIds] = useState([]);
   const [messageHits, setMessageHits] = useState([]);
 
   useEffect(() => {
-    getOrCreateIdentityKeyPair().then(({ secretKey }) => setMySecretKey(secretKey));
+    // Şəbəkə cavabından əvvəl son yadda saxlanan siyahını göstər (oflayn açılış).
+    readCache(cacheKeys.conversations).then((cached) => {
+      if (cached) setConversations((prev) => (prev.length ? prev : cached));
+    });
     AsyncStorage.getItem(PINNED_KEY).then((raw) => {
       try {
         setPinnedIds(raw ? JSON.parse(raw) : []);
@@ -68,9 +67,13 @@ export default function ChatListScreen({ navigation }) {
       async function poll() {
         try {
           const { data } = await fetchConversations();
-          if (active) setConversations(data);
-        } catch {
-          /* offline — köhnə siyahı qalsın */
+          if (!active) return;
+          setConversations(data);
+          setOffline(false);
+          writeCache(cacheKeys.conversations, data);
+        } catch (err) {
+          // oflayn — keşdəki siyahı qalsın
+          if (active && isNetworkError(err)) setOffline(true);
         }
       }
       poll();
@@ -87,26 +90,15 @@ export default function ChatListScreen({ navigation }) {
     if (!conversations.length) return;
     for (const c of conversations) {
       const last = c.last_message;
-      if (!last) continue;
-      let body;
-      if (c.is_group) body = last.text;
-      else if (!last.ciphertext) body = last.text;
-      else {
-        const other = c.participants.find((p) => p.id !== user.id);
-        body =
-          other?.public_key && mySecretKey
-            ? decryptFromSender(last.ciphertext, last.nonce, other.public_key, mySecretKey)
-            : null;
-      }
-      if (!body) continue;
-      body = describeBody(body);
+      if (!last?.text) continue;
+      const body = describeBody(last.text);
       rememberMessages(
         c.id,
         { name: conversationTitle(c, user.id), isGroup: c.is_group },
         [{ id: last.id ?? `last-${c.id}`, text: body, from: "", at: last.created_at, mine: false }]
       );
     }
-  }, [conversations, mySecretKey, user.id]);
+  }, [conversations, user.id]);
 
   // Söhbət mətnlərində axtarış (lokal indeksdən).
   useEffect(() => {
@@ -134,7 +126,7 @@ export default function ChatListScreen({ navigation }) {
     .map((c) => ({
       conv: c,
       title: conversationTitle(c, user.id),
-      preview: previewFor(c, user.id, mySecretKey),
+      preview: previewFor(c),
       time: chatListTime(c.last_message?.created_at),
       unread: c.unread_count || 0,
       pinned: pinnedIds.includes(c.id),
@@ -224,6 +216,8 @@ export default function ChatListScreen({ navigation }) {
           </Pressable>
         </View>
       </View>
+
+      <OfflineBanner visible={offline} />
 
       <View style={styles.controls}>
         <SearchBar value={search} onChangeText={setSearch} placeholder="Söhbətlərdə axtar" />

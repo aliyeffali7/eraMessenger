@@ -20,7 +20,10 @@ export function setRefreshHandler(fn) {
   refreshHandler = fn;
 }
 
-const client = axios.create({ baseURL: API_BASE_URL });
+// Timeout olmasa, zəif/kəsik bağlantıda sorğu sonsuz gözləyər və oflayn keşə
+// keçid gecikər. Fayl yükləmələri öz (daha uzun) timeout-unu verir.
+export const UPLOAD_TIMEOUT_MS = 120_000;
+const client = axios.create({ baseURL: API_BASE_URL, timeout: 20_000 });
 
 client.interceptors.request.use((config) => {
   if (accessToken) {

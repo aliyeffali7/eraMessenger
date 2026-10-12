@@ -9,7 +9,6 @@ import Card from "../components/Card";
 import ConfirmDialog from "../components/ConfirmDialog";
 import Row from "../components/Row";
 import { useAuth } from "../context/AuthContext";
-import { formatDegree } from "../degrees";
 import { useTheme } from "../theme";
 
 export default function ProfileScreen({ navigation }) {
@@ -36,14 +35,6 @@ export default function ProfileScreen({ navigation }) {
         </View>
         <Text style={[t.typography.title, { color: t.color.textPrimary, marginTop: 12 }]}>{fullName}</Text>
         <Text style={[t.typography.caption, { color: t.color.textSecondary }]}>@{user.username}</Text>
-        {user.section_name ? (
-          <View style={[styles.tag, { backgroundColor: t.color.accentMuted }]}>
-            <Ionicons name="business-outline" size={12} color={t.color.accent} />
-            <Text style={[t.typography.caption, { color: t.color.accent, fontFamily: "Archivo-SemiBold" }]}>
-              {user.unit_name} · {user.section_name}
-            </Text>
-          </View>
-        ) : null}
         {user.is_staff ? (
           <View style={[styles.tag, { backgroundColor: t.color.accentMuted }]}>
             <Ionicons name="shield-checkmark" size={12} color={t.color.accent} />
@@ -53,18 +44,13 @@ export default function ProfileScreen({ navigation }) {
       </View>
 
       <Card padded={false} style={styles.card}>
-        <Row type="plain" first icon="ribbon" title={formatDegree(user.degree)} />
         <Row
           type="plain"
+          first
           icon="calendar-outline"
           title="Qoşulma tarixi"
           value={new Date(user.joined_at).toLocaleDateString("az-AZ")}
         />
-      </Card>
-
-      <Card padded={false} style={styles.card}>
-        <Row type="plain" first icon="business-outline" title="Böyük Loja" value={user.unit_name || "Təyin edilməyib"} />
-        <Row type="plain" icon="people-outline" title="Möhtərəm Loja" value={user.section_name || "Təyin edilməyib"} />
       </Card>
 
       <Card padded={false} style={styles.card}>

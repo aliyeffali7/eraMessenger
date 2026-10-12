@@ -40,18 +40,13 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_AFTER = 3;
 const LOCKOUT_MS = 60_000;
 
-// expo-secure-store native-only; web-də fallback (E2EE üçün onsuz da zəif).
-const nativeSecure = Platform.OS !== "web";
 async function secureGet(key, opts) {
-  if (!nativeSecure) return AsyncStorage.getItem(key);
   return SecureStore.getItemAsync(key, opts);
 }
 async function secureSet(key, value, opts) {
-  if (!nativeSecure) return AsyncStorage.setItem(key, value);
   return SecureStore.setItemAsync(key, value, opts);
 }
 async function secureDelete(key, opts) {
-  if (!nativeSecure) return AsyncStorage.removeItem(key);
   try {
     await SecureStore.deleteItemAsync(key, opts);
   } catch {
@@ -123,7 +118,6 @@ export async function getMeta() {
 }
 
 export async function biometricAvailable() {
-  if (!nativeSecure) return false;
   try {
     const hw = await LocalAuthentication.hasHardwareAsync();
     const enrolled = await LocalAuthentication.isEnrolledAsync();
@@ -221,7 +215,6 @@ export async function unlockWithPin(pin) {
 
 // Nəticə: { ok, refreshToken } | { ok:false, reason }
 export async function unlockWithBiometric() {
-  if (!nativeSecure) return { ok: false, reason: "unavailable" };
   const meta = await getMeta();
   if (!meta.biometricEnabled) return { ok: false, reason: "disabled" };
   try {
@@ -258,7 +251,7 @@ export async function rotateStoredRefresh(pin, refreshToken) {
   }
 }
 
-// 5 səhv PIN və ya çıxış: hər şeyi sil (identity açarı YOX — o crypto.js-dədir).
+// 5 səhv PIN və ya çıxış: hər şeyi sil.
 export async function wipeLock() {
   await secureDelete(K.salt);
   await secureDelete(K.verifier);

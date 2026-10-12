@@ -83,7 +83,7 @@ export default function ForwardSheet({ visible, text, onClose, onDone }) {
   async function send() {
     if (!count || sending) return;
     setSending(true);
-    const results = await forwardText(text, Object.values(selected), user.id);
+    const results = await forwardText(text, Object.values(selected));
     setSending(false);
     onDone?.({
       sent: results.filter((r) => r.ok).length,

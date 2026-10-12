@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
@@ -8,9 +8,11 @@ import Button from "../components/Button";
 import Card from "../components/Card";
 import EmptyState from "../components/EmptyState";
 import Input from "../components/Input";
+import OfflineBanner from "../components/OfflineBanner";
 import { fetchMeetings, respondToMeeting } from "../api/meetings";
 import { useAuth } from "../context/AuthContext";
 import { fullDateTime } from "../lib/format";
+import { cacheKeys, isNetworkError, readCache, writeCache } from "../lib/offlineCache";
 import { useTheme } from "../theme";
 
 const WEEKDAYS = ["B.e", "Ç.a", "Ç", "C.a", "C", "Ş", "B"];
@@ -35,7 +37,7 @@ function DateChip({ iso }) {
   );
 }
 
-function MeetingCard({ meeting, onResponded }) {
+function MeetingCard({ meeting, onResponded, onError }) {
   const t = useTheme();
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
@@ -49,6 +51,8 @@ function MeetingCard({ meeting, onResponded }) {
       const { data } = await respondToMeeting(meeting.id, value, why.trim().slice(0, 300));
       onResponded(data);
       setReasonOpen(false);
+    } catch (err) {
+      onError(err);
     } finally {
       setBusy(false);
     }
@@ -156,15 +160,36 @@ function MeetingCard({ meeting, onResponded }) {
 export default function CalendarScreen() {
   const t = useTheme();
   const [meetings, setMeetings] = useState([]);
+  const [offline, setOffline] = useState(false);
+
+  useEffect(() => {
+    readCache(cacheKeys.meetings).then((cached) => {
+      if (cached) setMeetings((prev) => (prev.length ? prev : cached));
+    });
+  }, []);
 
   const load = useCallback(() => {
-    fetchMeetings().then(({ data }) => setMeetings(data)).catch(() => {});
+    fetchMeetings()
+      .then(({ data }) => {
+        setMeetings(data);
+        setOffline(false);
+        writeCache(cacheKeys.meetings, data);
+      })
+      .catch((err) => isNetworkError(err) && setOffline(true));
   }, []);
 
   useFocusEffect(useCallback(() => load(), [load]));
 
   function onResponded(updated) {
-    setMeetings((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+    setMeetings((prev) => {
+      const next = prev.map((m) => (m.id === updated.id ? updated : m));
+      writeCache(cacheKeys.meetings, next);
+      return next;
+    });
+  }
+
+  function onRespondError(err) {
+    if (isNetworkError(err)) setOffline(true);
   }
 
   const week = useMemo(() => {
@@ -212,7 +237,10 @@ export default function CalendarScreen() {
         data={meetings}
         keyExtractor={(m) => String(m.id)}
         contentContainerStyle={{ padding: 16, gap: 12, flexGrow: 1 }}
-        renderItem={({ item }) => <MeetingCard meeting={item} onResponded={onResponded} />}
+        ListHeaderComponent={<OfflineBanner visible={offline} />}
+        renderItem={({ item }) => (
+          <MeetingCard meeting={item} onResponded={onResponded} onError={onRespondError} />
+        )}
         ListEmptyComponent={
           <EmptyState icon="calendar-outline" title="Planlaşdırılmış iclas yoxdur" hint="Yeni iclas əlavə olunanda burada görünəcək" />
         }

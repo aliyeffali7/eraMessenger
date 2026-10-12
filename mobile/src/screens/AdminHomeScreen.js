@@ -13,20 +13,8 @@ export default function AdminHomeScreen({ navigation }) {
           first
           icon="people"
           title="Üzvləri idarə et"
-          hint="Yeni üzv yarat, dərəcələri dəyiş"
+          hint="Yeni üzv yarat"
           onPress={() => navigation.navigate("AdminUsers")}
-        />
-        <Row
-          icon="business"
-          title="Böyük Loja"
-          hint="Möhtərəm Lojalar yarat, üzv təyin et"
-          onPress={() => navigation.navigate("AdminOrg")}
-        />
-        <Row
-          icon="library"
-          title="Kitabxana idarəetməsi"
-          hint="PDF sənəd əlavə et, dərəcə təyin et"
-          onPress={() => navigation.navigate("AdminBooks")}
         />
       </Card>
     </ScrollView>

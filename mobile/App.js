@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { AppState, Platform, View } from "react-native";
+import { AppState, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import * as ScreenCapture from "expo-screen-capture";
 import { StatusBar } from "expo-status-bar";
@@ -28,9 +28,8 @@ function AppShell() {
   // Giriş etdikdən sonra (və PIN kilidində) ekran görüntüsü/yazısı bloklanır.
   // Android: FLAG_SECURE — recents önizləməsi də qara olur. iOS: yalnız
   // ekran yazısı/AirPlay gizlənir, screenshot-u iOS tam bloklamağa icazə vermir.
-  const protectScreen = Platform.OS !== "web" && (!!user || locked);
+  const protectScreen = !!user || locked;
   useEffect(() => {
-    if (Platform.OS === "web") return undefined;
     if (protectScreen) {
       ScreenCapture.preventScreenCaptureAsync().catch(() => {});
     } else {

@@ -1,22 +1,20 @@
 import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { ActivityIndicator, Platform, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../theme";
 import { stackScreenOptions, tabScreenOptions } from "./navTheme";
 import PinScreen from "../screens/PinScreen";
-import AdminBooksScreen from "../screens/AdminBooksScreen";
 import AdminHomeScreen from "../screens/AdminHomeScreen";
-import AdminOrgScreen from "../screens/AdminOrgScreen";
 import AdminUsersScreen from "../screens/AdminUsersScreen";
 import CalendarScreen from "../screens/CalendarScreen";
 import ChatListScreen from "../screens/ChatListScreen";
 import ChatScreen from "../screens/ChatScreen";
 import CreateMeetingScreen from "../screens/CreateMeetingScreen";
+import FilesScreen from "../screens/FilesScreen";
 import GroupInfoScreen from "../screens/GroupInfoScreen";
-import LibraryScreen from "../screens/LibraryScreen";
 import LoginScreen from "../screens/LoginScreen";
 import NewChatScreen from "../screens/NewChatScreen";
 import ChangePinScreen from "../screens/ChangePinScreen";
@@ -84,8 +82,6 @@ function AdminStack() {
     <Stack.Navigator screenOptions={stackScreenOptions(t)}>
       <Stack.Screen name="AdminHome" component={AdminHomeScreen} options={{ title: "Admin" }} />
       <Stack.Screen name="AdminUsers" component={AdminUsersScreen} options={{ title: "Üzvlər" }} />
-      <Stack.Screen name="AdminOrg" component={AdminOrgScreen} options={{ title: "Möhtərəm Lojalar" }} />
-      <Stack.Screen name="AdminBooks" component={AdminBooksScreen} options={{ title: "Kitabxana" }} />
     </Stack.Navigator>
   );
 }
@@ -117,14 +113,14 @@ function MainTabs() {
         }}
       />
       <Tab.Screen
-        name="Library"
-        component={LibraryScreen}
+        name="Files"
+        component={FilesScreen}
         options={{
-          title: "Kitabxana",
+          title: "Fayllar",
           headerShown: true,
           ...stackScreenOptions(t),
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? "library" : "library-outline"} size={size} color={color} />
+            <Ionicons name={focused ? "folder" : "folder-outline"} size={size} color={color} />
           ),
         }}
       />
@@ -138,7 +134,7 @@ function MainTabs() {
           ),
         }}
       />
-      {Platform.OS === "web" && user.is_staff && (
+      {user.is_staff && (
         <Tab.Screen
           name="Admin"
           component={AdminStack}

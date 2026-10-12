@@ -99,7 +99,6 @@ export default function MessageBubble({
   status,
   showSender = false,
   grouped = "single",
-  undecryptable = false,
   attachment = null, // { kind, name, size, dur, ... } — mətn əvəzinə göstərilir
   voice = null, // { playing, loading, progress, position, onToggle }
   fileBusy = false,
@@ -147,21 +146,14 @@ export default function MessageBubble({
         <Text style={[styles.sender, { color: t.color.accent }]}>{senderName}</Text>
       ) : null}
 
-      {attachment && !undecryptable ? (
+      {attachment ? (
         attachment.kind === "voice" ? (
           <VoiceContent meta={attachment} voice={voice} onLongPress={onLongPress} />
         ) : (
           <FileContent meta={attachment} busy={fileBusy} onOpen={onOpenFile} onLongPress={onLongPress} />
         )
       ) : (
-        <Text
-          style={[
-            t.typography.body,
-            { color: undecryptable ? t.color.textSecondary : t.color.textPrimary, fontStyle: undecryptable ? "italic" : "normal" },
-          ]}
-        >
-          {undecryptable ? "🔒 Mesaj deşifrə edilə bilmədi" : text}
-        </Text>
+        <Text style={[t.typography.body, { color: t.color.textPrimary }]}>{text}</Text>
       )}
 
       <View style={styles.meta}>

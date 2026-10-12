@@ -7,7 +7,6 @@ import Avatar from "./Avatar";
 import BottomSheet from "./BottomSheet";
 import Button from "./Button";
 import Row from "./Row";
-import { formatDegree } from "../degrees";
 import { useTheme } from "../theme";
 
 function nameOf(u) {
@@ -33,7 +32,6 @@ export default function PeerProfileSheet({ visible, onClose, user, conversationI
   if (!user) return null;
 
   const chips = [];
-  chips.push(formatDegree(user.degree));
   if (user.joined_at) chips.push(`Üzv: ${new Date(user.joined_at).getFullYear()}`);
 
   return (
@@ -65,9 +63,8 @@ export default function PeerProfileSheet({ visible, onClose, user, conversationI
       </View>
 
       <View style={[styles.card, { borderColor: t.color.border }]}>
-        <Row type="plain" first icon="business-outline" title="Böyük Loja" value={user.unit_name || "Təyin edilməyib"} />
-        <Row type="plain" icon="people-outline" title="Möhtərəm Loja" value={user.section_name || "Təyin edilməyib"} />
         <Row
+          first
           type="toggle"
           icon="notifications-off-outline"
           title="Səssiz et"

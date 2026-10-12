@@ -9,7 +9,7 @@ export function respondToMeeting(meetingId, response, reason = "") {
   return client.patch(`/meetings/${meetingId}/respond/`, { response, reason });
 }
 
-export function createMeeting({ title, description, location, startsAt, endsAt, userIds, sectionIds, unitIds, allUsers }) {
+export function createMeeting({ title, description, location, startsAt, endsAt, userIds, allUsers }) {
   return client.post("/meetings/create/", {
     title,
     description,
@@ -17,8 +17,6 @@ export function createMeeting({ title, description, location, startsAt, endsAt, 
     starts_at: startsAt,
     ends_at: endsAt || null,
     user_ids: userIds || [],
-    section_ids: sectionIds || [],
-    unit_ids: unitIds || [],
     all_users: !!allUsers,
   });
 }
